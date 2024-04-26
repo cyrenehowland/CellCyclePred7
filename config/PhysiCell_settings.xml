@@ -1,10 +1,10 @@
 <PhysiCell_settings version="devel-version">
 
     <domain>
-        <x_min>-500</x_min>
-        <x_max>500</x_max>
-        <y_min>-500</y_min>
-        <y_max>500</y_max>
+        <x_min>-1000</x_min>
+        <x_max>1000</x_max>
+        <y_min>-1000</y_min>
+        <y_max>1000</y_max>
         <z_min>-10</z_min>
         <z_max>10</z_max>
         <dx>20</dx>
@@ -14,7 +14,7 @@
     </domain>
 
     <overall>
-        <max_time units="min">7200</max_time>
+        <max_time units="min">72475200.0</max_time>
         <time_units>min</time_units>
         <space_units>micron</space_units>
         <dt_diffusion units="min">0.01</dt_diffusion>
@@ -23,7 +23,7 @@
     </overall>
 
     <parallel>
-        <omp_num_threads>1</omp_num_threads>
+        <omp_num_threads>6</omp_num_threads>
     </parallel>
 
     <save>
@@ -55,14 +55,14 @@
     <microenvironment_setup>
         <variable name="food" units="dimensionless" ID="0">
             <physical_parameter_set>
-                <diffusion_coefficient units="micron^2/min">2</diffusion_coefficient>
+                <diffusion_coefficient units="micron^2/min">1</diffusion_coefficient>
                 <decay_rate units="1/min">0</decay_rate>
             </physical_parameter_set>
             <initial_condition units="mmHg">0</initial_condition>
-            <Dirichlet_boundary_condition units="mmHg" enabled="False">0</Dirichlet_boundary_condition>
+            <Dirichlet_boundary_condition units="mmHg" enabled="True">0</Dirichlet_boundary_condition>
             <Dirichlet_options>
-                <boundary_value ID="xmin" enabled="False">0</boundary_value>
-                <boundary_value ID="xmax" enabled="False">0</boundary_value>
+                <boundary_value ID="xmin" enabled="True">0</boundary_value>
+                <boundary_value ID="xmax" enabled="False">10</boundary_value>
                 <boundary_value ID="ymin" enabled="False">0</boundary_value>
                 <boundary_value ID="ymax" enabled="False">0</boundary_value>
                 <boundary_value ID="zmin" enabled="False">0</boundary_value>
@@ -205,9 +205,9 @@
             <custom_data>
                 <sample conserved="false" units="dimensionless" description="">1.0</sample>
                 <energy conserved="true" units="" description="">0.0</energy>
-                <metabolic_rate conserved="false" units="" description="">0.025</metabolic_rate>
+                <metabolic_rate conserved="false" units="" description="">0.0025</metabolic_rate>
                 <life_cycle_p conserved="false" units="" description="">0.0</life_cycle_p>
-                <life_history_t conserved="false" units="" description="">0.0</life_history_t>
+                <life_history_t conserved="false" units="" description="">100</life_history_t>
                 <initial_volume conserved="false" units="" description="">0.0</initial_volume>
                 <edible conserved="false" units="boolean " description="">0.0</edible>
             </custom_data>
@@ -216,12 +216,12 @@
             <phenotype>
                 <cycle code="5" name="live">
                     <phase_durations units="min">
-                        <duration index="0" fixed_duration="false">1388.88889</duration>
+                        <duration index="0" fixed_duration="false">500</duration>
                     </phase_durations>
                 </cycle>
                 <death>
                     <model code="100" name="apoptosis">
-                        <death_rate units="1/min">5.31667e-05</death_rate>
+                        <death_rate units="1/min">0</death_rate>
                         <phase_transition_rates units="1/min">
                             <rate start_index="0" end_index="1" fixed_duration="false">0.001938</rate>
                         </phase_transition_rates>
@@ -237,7 +237,7 @@
                     <model code="101" name="necrosis">
                         <death_rate units="1/min">0.0</death_rate>
                         <phase_transition_rates units="1/min">
-                            <rate start_index="0" end_index="1" fixed_duration="false">9e9</rate>
+                            <rate start_index="0" end_index="1" fixed_duration="false">9000000000.0</rate>
                             <rate start_index="1" end_index="2" fixed_duration="true">1.15741e-05</rate>
                         </phase_transition_rates>
                         <parameters>
@@ -331,8 +331,8 @@
             </phenotype>
             <custom_data>
                 <sample conserved="false" units="dimensionless" description="">0.0</sample>
-                <energy conserved="false" units="" description="">0.0</energy>
-                <metabolic_rate conserved="false" units="" description="">0.025</metabolic_rate>
+                <energy conserved="true" units="" description="">0.0</energy>
+                <metabolic_rate conserved="false" units="" description="">0.001</metabolic_rate>
                 <life_cycle_p conserved="false" units="" description="">0.0</life_cycle_p>
                 <life_history_t conserved="false" units="" description="">0.0</life_history_t>
                 <initial_volume conserved="false" units="" description="">0.0</initial_volume>
