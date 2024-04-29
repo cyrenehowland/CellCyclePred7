@@ -83,6 +83,47 @@
 using namespace BioFVM;
 using namespace PhysiCell;
 
+#include <cmath>  // For exp(), pow()
+
+void add_random_substrate_to_voxel()
+{
+    int num_voxels = microenvironment.number_of_voxels();
+    int random_voxel_index = rand() % num_voxels;
+    
+    int idx_food = microenvironment.find_density_index("food");
+    
+    // Gaussian distribution parameters
+    double mean_x = microenvironment.mesh.voxels[random_voxel_index].center[0];
+    double mean_y = microenvironment.mesh.voxels[random_voxel_index].center[1];
+    double sigma = 100.0 + (rand() % 10); // Standard deviation in microns
+    double amplitude = 50.0 + (rand() % 10); // Amplitude of the Gaussian distribution
+    
+    // Apply Gaussian distribution to a single randomly chosen voxel
+    for( int n = 0; n < num_voxels; n++ )
+    {
+        std::vector<double> voxel_center = microenvironment.mesh.voxels[n].center;
+        double x = voxel_center[0];
+        double y = voxel_center[1];
+        
+        // Calculate the Gaussian function value based on the distance from the random voxel
+        double distance_squared = pow(x - mean_x, 2) + pow(y - mean_y, 2);
+        double value = amplitude * exp(-distance_squared / (2 * pow(sigma, 2)));
+        
+        // Add Gaussian value to the existing substrate concentration
+        microenvironment(n)[idx_food] += value;  // Correct way to access and modify substrate value
+    }
+}
+
+
+
+//    // Generate a random substrate amount between 1 and 100
+//       double random_substrate_amount = 1000.0 + (rand() % 200);
+//
+//    // Access and modify the substrate density
+//    microenvironment(random_voxel_index)[substrate_index] += random_substrate_amount;
+//
+//    std::cout << "Added substrate to voxel index: " << random_voxel_index << " at time: " << PhysiCell_globals.current_time << " and amount = " << microenvironment(random_voxel_index)[substrate_index] << std::endl;
+
 
 
 
@@ -219,7 +260,14 @@ int main( int argc, char* argv[] )
 			// update the microenvironment
 			microenvironment.simulate_diffusion_decay( diffusion_dt );
             // Update the microenvironment
-            update_microenvironment(diffusion_dt);
+//            update_microenvironment(diffusion_dt);
+            if( fabs(fmod(PhysiCell_globals.current_time, 100.0)) < 1e-2 )
+            {
+                // Periodically add substrate to voxels
+                add_random_substrate_to_voxel();
+                std::cout << std::endl << "Substrate Added " << std::endl;
+            }
+            
 			
 			// run PhysiCell 
 			((Cell_Container *)microenvironment.agent_container)->update_all_cells( PhysiCell_globals.current_time );

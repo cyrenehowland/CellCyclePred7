@@ -23,17 +23,17 @@
     </overall>
 
     <parallel>
-        <omp_num_threads>6</omp_num_threads>
+        <omp_num_threads>1</omp_num_threads>
     </parallel>
 
     <save>
         <folder>output</folder>
         <full_data>
-            <interval units="min">1</interval>
+            <interval units="min">10</interval>
             <enable>true</enable>
         </full_data>
         <SVG>
-            <interval units="min">1</interval>
+            <interval units="min">10</interval>
             <enable>true</enable>
             <plot_substrate enabled="false" limits="false">
                 <substrate>food</substrate>
@@ -332,7 +332,7 @@
             <custom_data>
                 <sample conserved="false" units="dimensionless" description="">0.0</sample>
                 <energy conserved="true" units="" description="">0.0</energy>
-                <metabolic_rate conserved="false" units="" description="">0.001</metabolic_rate>
+                <metabolic_rate conserved="false" units="" description="">0.006</metabolic_rate>
                 <life_cycle_p conserved="false" units="" description="">0.0</life_cycle_p>
                 <life_history_t conserved="false" units="" description="">0.0</life_history_t>
                 <initial_volume conserved="false" units="" description="">0.0</initial_volume>

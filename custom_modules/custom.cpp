@@ -111,28 +111,28 @@ void setup_microenvironment( void )
     
     initialize_microenvironment();
     
-    int idx_food = microenvironment.find_density_index( "food" );
-    
-    // Gaussian distribution parameters
-    double mean_x_A = microenvironment.mesh.bounding_box[3] / 2;  // center x
-    double mean_y_A = microenvironment.mesh.bounding_box[4] / 2;  // center y
-    double sigma_A = 200.0; // standard deviation in microns
-    double amplitude_A = 100.0; // Amplitude of the Gaussian distribution
- 
-    for( int n=0; n < microenvironment.number_of_voxels(); n++ )
-    {
-        auto& voxel = microenvironment.voxels(n);
-                double x_A = voxel.center[0];
-                double y_A = voxel.center[1];
-                
-                // Calculate the Gaussian function
-                double value_A = amplitude_A * exp( - (pow(x_A - mean_x_A, 2) + pow(y_A - mean_y_A, 2)) / (2 * pow(sigma_A, 2)) );
-                microenvironment(n)[idx_food] = value_A;  // assuming the substrate index is 0
-
-    }
-   
-    store_initial_concentrations();
-    return;
+//    int idx_food = microenvironment.find_density_index( "food" );
+//    
+//    // Gaussian distribution parameters
+//    double mean_x_A = microenvironment.mesh.bounding_box[3] / 2;  // center x
+//    double mean_y_A = microenvironment.mesh.bounding_box[4] / 2;  // center y
+//    double sigma_A = 200.0; // standard deviation in microns
+//    double amplitude_A = 100.0; // Amplitude of the Gaussian distribution
+// 
+//    for( int n=0; n < microenvironment.number_of_voxels(); n++ )
+//    {
+//        auto& voxel = microenvironment.voxels(n);
+//                double x_A = voxel.center[0];
+//                double y_A = voxel.center[1];
+//                
+//                // Calculate the Gaussian function
+//                double value_A = amplitude_A * exp( - (pow(x_A - mean_x_A, 2) + pow(y_A - mean_y_A, 2)) / (2 * pow(sigma_A, 2)) );
+//                microenvironment(n)[idx_food] = value_A;  // assuming the substrate index is 0
+//
+//    }
+//   
+//    store_initial_concentrations();
+//    return;
 }
 
 
@@ -394,29 +394,29 @@ void setup_tissue( void )
 // Environment Update Function
 // =============================================================================
 
-void update_microenvironment(double dt)
-{
-    static int food_idx = microenvironment.find_density_index("food");
-    double regeneration_rate = 0.1; // set this to your desired rate
-
-    #pragma omp parallel for
-    for(int i = 0; i < microenvironment.mesh.voxels.size(); i++)
-    {
-        auto& voxel = microenvironment.mesh.voxels[i];
-        double updated_concentration = microenvironment.density_vector(i)[food_idx] + regeneration_rate * dt;
-        // Ensure the concentration does not exceed the initial value
-        if(updated_concentration > initial_food_concentration[i])
-        {
-            microenvironment.density_vector(i)[food_idx] = initial_food_concentration[i];
-        }
-        else
-        {
-            microenvironment.density_vector(i)[food_idx] = updated_concentration;
-        }
-    }
-    
-    
-}
+//void update_microenvironment(double dt)
+//{
+//    static int food_idx = microenvironment.find_density_index("food");
+//    double regeneration_rate = 0.1; // set this to your desired rate
+//
+//    #pragma omp parallel for
+//    for(int i = 0; i < microenvironment.mesh.voxels.size(); i++)
+//    {
+//        auto& voxel = microenvironment.mesh.voxels[i];
+//        double updated_concentration = microenvironment.density_vector(i)[food_idx] + regeneration_rate * dt;
+//        // Ensure the concentration does not exceed the initial value
+//        if(updated_concentration > initial_food_concentration[i])
+//        {
+//            microenvironment.density_vector(i)[food_idx] = initial_food_concentration[i];
+//        }
+//        else
+//        {
+//            microenvironment.density_vector(i)[food_idx] = updated_concentration;
+//        }
+//    }
+//    
+//    
+//}
 
 
 
@@ -841,7 +841,7 @@ void pred_hunt_function( Cell* pCell, Phenotype& phenotype, double dt ){
     bool is_hungry = (pCell->custom_data["energy"] < 40);
     
     
-    std::cout << "Predator (ID: " << pCell->ID  << ") number of neighbors = " <<   pCell->state.neighbors.size() << std::endl;
+//    std::cout << "Predator (ID: " << pCell->ID  << ") number of neighbors = " <<   pCell->state.neighbors.size() << std::endl;
 
     
     for( int n=0; n < pCell->state.neighbors.size(); n++ )
@@ -856,7 +856,7 @@ void pred_hunt_function( Cell* pCell, Phenotype& phenotype, double dt ){
             
             pCell -> custom_data["energy"] +=10;
             
-            std::cout << "Predator has ingested prey: " << nbr->ID << ". New energy: " << pCell->custom_data["energy"] << std::endl;
+//            std::cout << "Predator has ingested prey: " << nbr->ID << ". New energy: " << pCell->custom_data["energy"] << std::endl;
             
             is_hungry = (pCell->custom_data["energy"] < 40);  // Re-evaluate hunger in case the condition changes due to energy increase
 
