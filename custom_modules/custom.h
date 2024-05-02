@@ -67,7 +67,7 @@
 
 #include "../core/PhysiCell.h"
 #include "../modules/PhysiCell_standard_modules.h" 
-
+#include <map>
 using namespace BioFVM; 
 using namespace PhysiCell;
 
@@ -103,6 +103,15 @@ void phase_2_entry_function(Cell* pCell, Phenotype& phenotype, double dt);
 void phase_2_exit_function(Cell* pCell, Phenotype& phenotype, double dt);
 void phase_3_entry_function(Cell* pCell, Phenotype& phenotype, double dt);
 void phase_3_exit_function(Cell* pCell, Phenotype& phenotype, double dt);
+
+
+void process_divisions(std::vector<Cell*>& cells);
+void update_lineage_on_division(Cell* parent, Cell* child);
+
+#include <map>
+
+extern std::map<Cell*, std::vector<Cell*>> lineage_map;
+void attach_cells_in_lineage(Cell* new_cell, std::vector<Cell*>& lineage_cells);
 
 void pred_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt );
 void pred_hunt_function( Cell* pCell, Phenotype& phenotype, double dt );

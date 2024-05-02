@@ -616,18 +616,35 @@ void prey_growth_and_metabolism(Cell* pCell, Phenotype& phenotype, double dt)
     // sample the microenvironment at the cell’s locaiton
     double food_nearby = pCell->nearest_density_vector()[food_index];
     
+    // Define the threshold and calculate food_eaten
+    double threshold = 10.0;  // Example threshold
+    double food_eaten;
+    if (food_nearby < threshold)
+        food_eaten = food_nearby;  // Eat all available food if below threshold
+    else
+        food_eaten = 10.0;  // Eat a fixed amount otherwise
+       
+    
     // Update Energy:
     // Cell gains energy equivalent to food consumption
-    pCell->custom_data["energy"] += food_nearby; // Cell gains energy equivalent to food consumption
+    pCell->custom_data["energy"] += food_eaten; // Cell gains energy equivalent to food consumption
     // Update energy based on metabolism
     static double metabolic_rate = pCell -> custom_data["metabolic_rate"];
     pCell->custom_data["energy"] /= (1.0 + dt*metabolic_rate);
+    
+    // Update the microenvironment:
+    // reduce food at the cell's location (it "ate" it)
+    double new_food_level = std::max(0.0, food_nearby - food_eaten); // Ensure not negative
+    int voxel_index = pCell->get_current_voxel_index();
+    microenvironment(voxel_index)[food_index] = new_food_level;
+    
+
     
     // Update Volume:
     // Constants for the power law model
     const double b = 3/4 ; // Define the exponent b
     const double k_base = 10;  // Base value for k
-    double k = k_base * food_nearby;
+    double k = k_base * food_eaten;
     
     // Get the current volume
     double current_volume = pCell->phenotype.volume.total;
@@ -638,13 +655,8 @@ void prey_growth_and_metabolism(Cell* pCell, Phenotype& phenotype, double dt)
     // Set the new volume
     pCell->set_total_volume(new_volume);
     
-    // Update the microenvironment:
-    // reduce food at the cell's location (it "ate" it)
-    int voxel_index = pCell->get_current_voxel_index();
-    double new_food_level = std::max(0.0, food_nearby - food_nearby); // Ensure not negative
-    microenvironment(voxel_index)[food_index] = new_food_level;
-    
-//    std::cout << "Cell ID ("<< pCell->ID <<" ) new volume is: " << new_volume << std::endl;
+    //    std::cout << "Cell ID ("<< pCell->ID <<" ) new volume is: " << new_volume << std::endl;
+   
 }
 
 Cell* perform_division(Cell* pCell){

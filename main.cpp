@@ -116,18 +116,6 @@ void add_random_substrate_to_voxel()
 
 
 
-//    // Generate a random substrate amount between 1 and 100
-//       double random_substrate_amount = 1000.0 + (rand() % 200);
-//
-//    // Access and modify the substrate density
-//    microenvironment(random_voxel_index)[substrate_index] += random_substrate_amount;
-//
-//    std::cout << "Added substrate to voxel index: " << random_voxel_index << " at time: " << PhysiCell_globals.current_time << " and amount = " << microenvironment(random_voxel_index)[substrate_index] << std::endl;
-
-
-
-
-
 int main( int argc, char* argv[] )
 {
 	// load and parse settings file(s)
