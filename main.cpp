@@ -96,7 +96,7 @@ void add_random_substrate_to_voxel()
     double mean_x = microenvironment.mesh.voxels[random_voxel_index].center[0];
     double mean_y = microenvironment.mesh.voxels[random_voxel_index].center[1];
     double sigma = 100.0 + (rand() % 10); // Standard deviation in microns
-    double amplitude = 50.0 + (rand() % 10); // Amplitude of the Gaussian distribution
+    double amplitude = 100.0 + (rand() % 10); // Amplitude of the Gaussian distribution
     
     // Apply Gaussian distribution to a single randomly chosen voxel
     for( int n = 0; n < num_voxels; n++ )

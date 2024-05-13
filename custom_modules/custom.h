@@ -67,7 +67,7 @@
 
 #include "../core/PhysiCell.h"
 #include "../modules/PhysiCell_standard_modules.h" 
-#include <map>
+
 using namespace BioFVM; 
 using namespace PhysiCell;
 
@@ -94,7 +94,9 @@ void contact_function( Cell* pMe, Phenotype& phenoMe , Cell* pOther, Phenotype& 
 
 void prey_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt );
 void prey_growth_and_metabolism(Cell* pCell, Phenotype& phenotype, double dt);
+void prey_stress_function(Cell* pCell, Phenotype& phenotype, double dt);
 bool G0_arrest_function(Cell* pCell, Phenotype& phenotype, double dt);
+bool S_arrest_function(Cell* pCell, Phenotype& phenotype, double dt);
 void phase_0_entry_function(Cell* pCell, Phenotype& phenotype, double dt);
 void phase_0_exit_function(Cell* pCell, Phenotype& phenotype, double dt);
 void phase_1_entry_function(PhysiCell::Cell* pCell, PhysiCell::Phenotype& phenotype, double dt);
@@ -105,13 +107,7 @@ void phase_3_entry_function(Cell* pCell, Phenotype& phenotype, double dt);
 void phase_3_exit_function(Cell* pCell, Phenotype& phenotype, double dt);
 
 
-void process_divisions(std::vector<Cell*>& cells);
-void update_lineage_on_division(Cell* parent, Cell* child);
-
-#include <map>
-
-extern std::map<Cell*, std::vector<Cell*>> lineage_map;
-void attach_cells_in_lineage(Cell* new_cell, std::vector<Cell*>& lineage_cells);
 
 void pred_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt );
 void pred_hunt_function( Cell* pCell, Phenotype& phenotype, double dt );
+bool pred_repo_arrest_function( Cell* pCell, Phenotype& phenotype, double dt );

@@ -68,6 +68,7 @@
 #include "./custom.h"
 double max_life_cycle_p = 1.0;
 double min_life_cycle_p = 0.0;
+const double EPSILON = 1e-6;
 
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -84,21 +85,6 @@ double min_life_cycle_p = 0.0;
 // =============================================================================
 // Environment Setup Functions
 // =============================================================================
-
-
-std::vector<double> initial_food_concentration;
-
-void store_initial_concentrations()
-{
-    static int food_idx = microenvironment.find_density_index("food");
-    initial_food_concentration.resize(microenvironment.mesh.voxels.size());
-
-    #pragma omp parallel for
-    for(int i = 0; i < microenvironment.mesh.voxels.size(); i++)
-    {
-        initial_food_concentration[i] = microenvironment.density_vector(i)[food_idx];
-    }
-}
 
 void setup_microenvironment( void )
 {
@@ -219,6 +205,7 @@ void create_cell_types( void )
     
 //    pPreyDef -> functions.update_velocity = prey_update_cell_velocity;
 //    pPreyDef -> functions.update_migration_bias = prey_migration_bias_function;
+    
     pPreyDef->functions.update_phenotype = prey_phenotype_function;
     pPreyDef->phenotype.mechanics.attachment_elastic_constant = parameters.doubles("attachment_elastic_constant");
     pPreyDef->functions.contact_function = standard_elastic_contact_function;
@@ -246,13 +233,18 @@ void create_cell_types( void )
     
     prey_cycle_model.phase_link(0,1).arrest_function = G0_arrest_function; // Assign an arrest function
 //    prey_cycle_model.phase_link(0,1).arrest_function = NULL;
-    prey_cycle_model.phase_link(1,2).arrest_function = NULL;
+    prey_cycle_model.phase_link(1,2).arrest_function = S_arrest_function;
     prey_cycle_model.phase_link(2,3).arrest_function = NULL;
     prey_cycle_model.phase_link(3,0).arrest_function = NULL;
         
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // ~~~~~~~~~~~~~ Predator Cell Function Assignment ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Cell_Definition* pPredDef = find_cell_definition( "Predator" );
+    
+    Cycle_Model& pred_cycle_model = pPredDef -> phenotype.cycle.model(); // Access cycle model for modification
+    
+    pred_cycle_model.phase_link(0,1).arrest_function = pred_repo_arrest_function; // Assign an arrest function
+
     
     pPredDef->functions.update_phenotype = pred_phenotype_function;
     
@@ -282,6 +274,9 @@ void prey_initialize_properties(Cell* cell){
     cell -> custom_data["initial_volume"] = cell -> phenotype.volume.total;
     cell -> phenotype.motility.is_motile = true;
     cell -> custom_data["energy"] = 25;
+    cell -> custom_data["stress"] = 0;
+
+    
     
     // Set cell cycle transition rates:
 
@@ -295,6 +290,11 @@ void prey_initialize_properties(Cell* cell){
     // Set transition rates for phase 0 to 1 and phase 2 to 3
     double phase_0_duration = (1 - life_cycle_p) * life_history_t;
     double phase_2_duration = life_cycle_p * life_history_t;
+    
+    // Use EPSILON to ensure durations are not zero
+    phase_0_duration = std::max(phase_0_duration, EPSILON);
+    phase_2_duration = std::max(phase_2_duration, EPSILON);
+
     
     // Modify the cell cycle of the specific cell
     cell->phenotype.cycle.data.transition_rate(0, 1) = 1.0 / phase_0_duration;
@@ -452,6 +452,7 @@ void prey_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt )
     else {pCell -> custom_data["edible"] = true;}
     
     
+//    std::cout << "Cell (ID: " << pCell->ID << " ) has number of attachments =  " << pCell -> state.number_of_attached_cells() << std::endl;
     
     // Make sure growth only happens in the first and third cycle phases
     int current_phase_index = pCell->phenotype.cycle.current_phase_index();
@@ -459,12 +460,14 @@ void prey_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt )
         prey_growth_and_metabolism(pCell, phenotype, dt);
     }
     
+    // Stress acounting based on enviornment (low food or predator presence
+    prey_stress_function(pCell, phenotype, dt);
+    
     // Death based on starvation
     if( pCell->custom_data["energy"] < 1.0 )
     {
         pCell->lyse_cell();
 
-//        std::cout << "Cell ID ("<< pCell->ID <<" ) Is dead/dying. Energy = " << pCell->custom_data["energy"] << std::endl;
     }
 
     return; }
@@ -473,110 +476,105 @@ void prey_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt )
 //  Prey Motility and Motion Update Functions
 // =============================================================================
 
-void custom_update_motility_vector(Cell* pCell, Phenotype& phenotype , double dt)
-{
-    double orientation_bias;
-    
-    if( phenotype.motility.is_motile == false )
-    {
-        phenotype.motility.motility_vector.assign( 3, 0.0 );
-        return;
-    }
-    
-    if( UniformRandom() < dt / phenotype.motility.persistence_time || phenotype.motility.persistence_time < dt )
-    {
-        std::vector<double> randvec(3,0.0);
-        if( phenotype.motility.restrict_to_2D == true )
-        { randvec = UniformOnUnitCircle(); }
-        else
-        { randvec = UniformOnUnitSphere(); }
-        
-        // if the update_bias_vector function is set, use it
-        if( pCell -> functions.update_migration_bias )
-        {
-            pCell -> functions.update_migration_bias( pCell ,phenotype,dt );
-        }
-        
-        // Calculate new bias direction taking into account orientation and chemical gradient:
-        
-        // Fetch orientation vector
-        std::vector<double> orient_vector = pCell -> state.orientation;
-        
-        // Fetch chemotaxis vector
-        static int n_index = microenvironment.find_density_index( "food" );
-        std::vector<double> chemo_grad = pCell->nearest_gradient(n_index);
-        
-        normalize( &chemo_grad ); // Normalize
-        
-        
-        if ( norm(chemo_grad) > 1e-3 )
-            {
-                phenotype.motility.migration_bias = std::min(norm(chemo_grad) + 0.6, 0.99 );
-                
-                // Take dot product of both normalized vectors
-                double dot_prod = dot_product(orient_vector, chemo_grad);
-                
-//                std::cout << "Dot product of vectors for Cell (ID: " << pCell-> ID << " ) : " << dot_prod << std::endl;
-                
-                // Use dot product to determine new direction
-                if (dot_prod > 0.5) // Vectors are aligned
-                {
-                    phenotype.motility.persistence_time = 2.0 + 4*dot_prod;
-                }
-                else // Vectors are not aligned
-                {
-                    // If the cell is facing away from the detected gradient direction, update orientation more frequently
-                    phenotype.motility.persistence_time  = 2.0;
-
-                }
-            }
-            else {
-                phenotype.motility.persistence_time = 5.0;
-                phenotype.motility.migration_speed = 5.0;
-                phenotype.motility.migration_bias = 0.6;
-                
-                
-                
-
-            }
-        
-        
-        
-        
-        // Set orientation bias:
-        // (how much the cell corrects orientation towards chemical gradient direction after each run)
-        // How much the cells movement is determined by its orientatioin vs the detected chemical gradient direction
-        orientation_bias = 0.5;
-        
-        // Update migration bias direction:
-        phenotype.motility.migration_bias_direction = orientation_bias*chemo_grad; //bias_vector = orientation_bias*chem_grad_direction
-
-        double one_minus_orientation_bias = 1.0 - orientation_bias;
-        axpy(&(phenotype.motility.migration_bias_direction), one_minus_orientation_bias, orient_vector); //bias_vector = orientation_bias*chem_grad_direction + (1-orientation_bias)*orientation_direction
-        normalize( &(phenotype.motility.migration_bias_direction) );
-
-
-        
-        // Update motility vector:
-        phenotype.motility.motility_vector = phenotype.motility.migration_bias_direction; // motility = bias_vector
-        phenotype.motility.motility_vector *= phenotype.motility.migration_bias; // motility = bias*bias_vector
-        
-        double one_minus_bias = 1.0 - (phenotype.motility.migration_bias);
-        
-        axpy( &phenotype.motility.motility_vector, one_minus_bias, randvec ); // motility = (1-bias)*randvec + bias*bias_vector
-        normalize( &phenotype.motility.motility_vector );
-        
-        // Update cell's new orientation to new motility vector direction (normalized)
-//        pCell -> state.orientation = phenotype.motility.motility_vector;
-        // Scale motility vector by migration speed
-        phenotype.motility.motility_vector *= phenotype.motility.migration_speed;
-        
-        
-        phenotype.motility.motility_vector[2] = 0.0; // Enforce no movement in z-direction
-//        pCell->state.orientation[2] = 0.0; // Enforce no orientation component in z-direction
-    }
-    return;
-}
+//void custom_update_motility_vector(Cell* pCell, Phenotype& phenotype , double dt)
+//{
+//    double orientation_bias;
+//    
+//    if( phenotype.motility.is_motile == false )
+//    {
+//        phenotype.motility.motility_vector.assign( 3, 0.0 );
+//        return;
+//    }
+//    
+//    if( UniformRandom() < dt / phenotype.motility.persistence_time || phenotype.motility.persistence_time < dt )
+//    {
+//        std::vector<double> randvec(3,0.0);
+//        if( phenotype.motility.restrict_to_2D == true )
+//        { randvec = UniformOnUnitCircle(); }
+//        else
+//        { randvec = UniformOnUnitSphere(); }
+//        
+//        // if the update_bias_vector function is set, use it
+//        if( pCell -> functions.update_migration_bias )
+//        {
+//            pCell -> functions.update_migration_bias( pCell ,phenotype,dt );
+//        }
+//        
+//        // Calculate new bias direction taking into account orientation and chemical gradient:
+//        
+//        // Fetch orientation vector
+//        std::vector<double> orient_vector = pCell -> state.orientation;
+//        
+//        // Fetch chemotaxis vector
+//        static int n_index = microenvironment.find_density_index( "food" );
+//        std::vector<double> chemo_grad = pCell->nearest_gradient(n_index);
+//        
+//        normalize( &chemo_grad ); // Normalize
+//        
+//        
+//        if ( norm(chemo_grad) > 1e-3 )
+//            {
+//                phenotype.motility.migration_bias = std::min(norm(chemo_grad) + 0.6, 0.99 );
+//                
+//                // Take dot product of both normalized vectors
+//                double dot_prod = dot_product(orient_vector, chemo_grad);
+//                
+////                std::cout << "Dot product of vectors for Cell (ID: " << pCell-> ID << " ) : " << dot_prod << std::endl;
+//                
+//                // Use dot product to determine new direction
+//                if (dot_prod > 0.5) // Vectors are aligned
+//                {
+//                    phenotype.motility.persistence_time = 2.0 + 4*dot_prod;
+//                }
+//                else // Vectors are not aligned
+//                {
+//                    // If the cell is facing away from the detected gradient direction, update orientation more frequently
+//                    phenotype.motility.persistence_time  = 2.0;
+//                }
+//            }
+//            else {
+//                phenotype.motility.persistence_time = 5.0;
+//                phenotype.motility.migration_speed = 5.0;
+//                phenotype.motility.migration_bias = 0.6;
+//            }
+//        
+//        
+//        
+//        
+//        // Set orientation bias:
+//        // (how much the cell corrects orientation towards chemical gradient direction after each run)
+//        // How much the cells movement is determined by its orientatioin vs the detected chemical gradient direction
+//        orientation_bias = 0.5;
+//        
+//        // Update migration bias direction:
+//        phenotype.motility.migration_bias_direction = orientation_bias*chemo_grad; //bias_vector = orientation_bias*chem_grad_direction
+//
+//        double one_minus_orientation_bias = 1.0 - orientation_bias;
+//        axpy(&(phenotype.motility.migration_bias_direction), one_minus_orientation_bias, orient_vector); //bias_vector = orientation_bias*chem_grad_direction + (1-orientation_bias)*orientation_direction
+//        normalize( &(phenotype.motility.migration_bias_direction) );
+//
+//
+//        
+//        // Update motility vector:
+//        phenotype.motility.motility_vector = phenotype.motility.migration_bias_direction; // motility = bias_vector
+//        phenotype.motility.motility_vector *= phenotype.motility.migration_bias; // motility = bias*bias_vector
+//        
+//        double one_minus_bias = 1.0 - (phenotype.motility.migration_bias);
+//        
+//        axpy( &phenotype.motility.motility_vector, one_minus_bias, randvec ); // motility = (1-bias)*randvec + bias*bias_vector
+//        normalize( &phenotype.motility.motility_vector );
+//        
+//        // Update cell's new orientation to new motility vector direction (normalized)
+////        pCell -> state.orientation = phenotype.motility.motility_vector;
+//        // Scale motility vector by migration speed
+//        phenotype.motility.motility_vector *= phenotype.motility.migration_speed;
+//        
+//        
+////        phenotype.motility.motility_vector[2] = 0.0; // Enforce no movement in z-direction
+////        pCell->state.orientation[2] = 0.0; // Enforce no orientation component in z-direction
+//    }
+//    return;
+//}
 
 
 //void custom_migration_bias_function( Cell* pCell, Phenotype& phenotype , double dt ){
@@ -596,12 +594,6 @@ void custom_update_motility_vector(Cell* pCell, Phenotype& phenotype , double dt
 //            phenotype.motility.migration_bias = 0.6;
 //
 //        }
-//    
-//    
-//    
-//    
-//}
-//    
 
 
 // =============================================================================
@@ -659,42 +651,142 @@ void prey_growth_and_metabolism(Cell* pCell, Phenotype& phenotype, double dt)
    
 }
 
+void prey_stress_function(Cell* pCell, Phenotype& phenotype, double dt)
+{
+    static Cell_Definition* pPreyDef = find_cell_definition( "Cell" );
+    static Cell_Definition* pPredDef = find_cell_definition( "Predator" );
+    
+    // Increase stress levels if predator is nearby
+    for( int n=0; n < pCell->state.neighbors.size(); n++ )
+    {
+        Cell* nbr = pCell->state.neighbors[n];
+        if( nbr->type == pPredDef->type ){
+            pCell -> custom_data["stress"] +=2;
+//            std::cout << "Cell ID ("<< pCell->ID <<" ) detects predator. " << std::endl;
+        }
+    }
+    
+    // Increase stress levels if there isn't food around
+    int food_index = microenvironment.find_density_index("food");
+    double food_nearby = pCell->nearest_density_vector()[food_index];
+    double threshold = 1.0;
+    if (food_nearby < threshold ){
+        pCell -> custom_data["stress"] +=0.1;
+//        std::cout << "Cell ID ("<< pCell->ID <<" ) detects low food. " << std::endl;
+
+    }
+    else {
+        pCell -> custom_data["stress"] -=0.5;
+//        std::cout << "Cell ID ("<< pCell->ID <<" ) detects adequate food. " << std::endl;
+    }
+    
+    
+    // Update stress based on decay rate
+    static double stress_decay_rate = pCell -> custom_data["stress_decay_rate"];
+    pCell->custom_data["stress"] /= (1.0 + dt*stress_decay_rate);
+    
+    // Ensure stress does not go negative
+    if (pCell->custom_data["stress"] < 0)
+    {
+        pCell->custom_data["stress"] = 0;
+    }
+//    std::cout << "Cell ID ("<< pCell->ID <<" ) new stress level is: " << pCell->custom_data["stress"] << std::endl;
+    
+}
+
 Cell* perform_division(Cell* pCell){
     Cell* child = pCell -> divide(); // Perform division, creating a child cell
 //    std::cout << "Division Occured! Parent Cell ID: " << pCell->ID << ". Child Cell ID: "<< child->ID <<std::endl;
     return child;
 }
 
+//
+//void recursive_division_and_attach(PhysiCell::Cell* pCell, double initial_volume, int& division_count, std::vector<PhysiCell::Cell*>& lineage_cells) {
+////    std::cout << "Evaluating Cell ID: " << pCell->ID << " for further division." << std::endl;
+//
+//    double current_volume = pCell->phenotype.volume.total;
+//
+//    // Check if the cell can divide
+//    if (current_volume >= 2 * initial_volume) {
+//        PhysiCell::Cell* child = perform_division(pCell);
+////        std::cout << "Division Occurred! Parent Cell ID: " << pCell->ID << ". Child Cell ID: " << child->ID << std::endl;
+//        division_count++;
+//        
+//        // Add the child to the lineage cells
+//        lineage_cells.push_back(child);
+//
+//        // Attach child to all other cells in lineage
+//        for(auto other_cell : lineage_cells) {
+//            if(other_cell != child) {
+//                child->attach_cell(other_cell);
+////                std::cout << "Attaching Cell ID " << child->ID << " to Cell ID " << other_cell->ID << std::endl;
+////                std::cout << "Cell (ID: " << child->ID << " ) has number of attachments =  " << child -> state.number_of_attached_cells() << std::endl;
+//                
+//            }
+//        }
+//        // Attach the parent to the child if not already done
+//        pCell->attach_cell(child);
+////        std::cout << "Attaching Cell ID " << pCell->ID << " to Cell ID " << child->ID << std::endl;
+////        std::cout << "Cell (ID: " << pCell->ID << " ) has number of attachments =  " << pCell -> state.number_of_attached_cells() << std::endl;
+//        
+//        
+//        // Recursive calls
+//        recursive_division_and_attach(pCell, initial_volume, division_count, lineage_cells);
+//        recursive_division_and_attach(child, initial_volume, division_count, lineage_cells);
+//    }
+//}
 
-void recursive_division_and_attach(PhysiCell::Cell* pCell, double initial_volume, int& division_count, std::vector<PhysiCell::Cell*>& lineage_cells) {
-//    std::cout << "Evaluating Cell ID: " << pCell->ID << " for further division." << std::endl;
 
-    double current_volume = pCell->phenotype.volume.total;
 
-    // Check if the cell can divide
-    if (current_volume >= 2 * initial_volume) {
-        PhysiCell::Cell* child = perform_division(pCell);
-//        std::cout << "Division Occurred! Parent Cell ID: " << pCell->ID << ". Child Cell ID: " << child->ID << std::endl;
-        division_count++;
+void iterative_division_and_attach(Cell* pCell, double initial_volume) {
+    //    std::cout << "Evaluating Cell ID: " << pCell->ID << " for further division." << std::endl;
+    std::vector<Cell*> current_cells;
+    current_cells.push_back(pCell);
+    
+    int target_divisions = (int)floor(log2(pCell->phenotype.volume.total / initial_volume));
+    
+    
+    for (int i = 0; i < target_divisions; ++i) {
+        std::vector<Cell*> new_cells;
         
-        // Add the child to the lineage cells
-        lineage_cells.push_back(child);
-
-        // Attach child to all other cells in lineage
-        for(auto other_cell : lineage_cells) {
-            if(other_cell != child) {
-                child->attach_cell(other_cell);
-//                std::cout << "Attaching Cell ID " << child->ID << " to Cell ID " << other_cell->ID << std::endl;
+        // Perform division for each cell and update relationships
+        for (auto cell : current_cells) {
+            if (cell->phenotype.volume.total >= 2 * initial_volume) {
+                Cell* child = perform_division(cell);
+                new_cells.push_back(child);
+                cell->attach_cell(child); // Attach parent to child
+                child->attach_cell(cell); // Attach child to parent
+                
+                // If you are attached to others, label 'inedible'
+                if (cell->state.number_of_attached_cells() > 0){
+                    cell -> custom_data["edible"] = false;
+                }
+                else {cell -> custom_data["edible"] = true;}
+                
+                
+                // Label child as inedible if attached
+                if (child->state.number_of_attached_cells() > 0){
+                    child -> custom_data["edible"] = false;
+                }
+                else {child -> custom_data["edible"] = true;}
+                
+                
+                
+                // Also, attach new child to all previous lineage cells
+                for (auto lineage_cell : current_cells) {
+                    if (lineage_cell != cell) { // No need to attach a cell to itself
+                        child->attach_cell(lineage_cell);
+                        lineage_cell->attach_cell(child);
+                    }
+                }
             }
+            // If no division is needed, still carry over the cell to the next cycle
+            new_cells.push_back(cell); // Update the list of current cells for next division cycle
         }
-        // Attach the parent to the child if not already done
-        pCell->attach_cell(child);
-        
-        // Recursive calls
-        recursive_division_and_attach(pCell, initial_volume, division_count, lineage_cells);
-        recursive_division_and_attach(child, initial_volume, division_count, lineage_cells);
+        current_cells = new_cells; // Update the list of current cells
     }
 }
+
 
 
 void mutation_function( Cell* pCell, Phenotype& phenotype, double dt ){
@@ -704,13 +796,15 @@ void mutation_function( Cell* pCell, Phenotype& phenotype, double dt ){
     // Mutate Transition rate:
     double multiplier2= 0.95 + 0.1*uniform_random();
     
-    // Mutate life history and life cycle gene
-//    pCell->custom_data["life_history_t"] *= multiplier1;
+    // Mutate life cycle gene
     pCell->custom_data["life_cycle_p"] *= multiplier2;
+    // Clamp life_cycle_p to not exceed 1
+    pCell->custom_data["life_cycle_p"] = std::min(1.0,pCell->custom_data["life_cycle_p"] );
     
     // Retrieve custom data from the specific cell
     double life_history_t = pCell->custom_data["life_history_t"];
     double life_cycle_p = pCell->custom_data["life_cycle_p"];
+    
     
     // Set transition rates for phase 0 to 1 and phase 2 to 3
     double phase_0_duration = (1 - life_cycle_p) * life_history_t;
@@ -735,6 +829,20 @@ bool G0_arrest_function(Cell* pCell, Phenotype& phenotype, double dt)
     }
     return false;
 }
+bool S_arrest_function(Cell* pCell, Phenotype& phenotype, double dt)
+{
+    // access stress level
+    double stress_level = pCell -> custom_data["stress"];
+    
+    // Get the threshold for arrest function
+    double stress_threshold = pCell -> custom_data["cycle_arrest_stress_threshold"];
+    if (stress_level > stress_threshold ){
+        return true;
+    }
+    return false;
+    
+    
+}
 
 
 void phase_0_entry_function(Cell* pCell, Phenotype& phenotype, double dt)
@@ -758,21 +866,27 @@ void phase_1_entry_function(PhysiCell::Cell* pCell, PhysiCell::Phenotype& phenot
     
     // In preperation for division, mutate cell (so that all children have same genes)
     mutation_function( pCell, phenotype, dt ); // Mutate transition rates
-
-    double volume_before_division = pCell ->phenotype.volume.total;
-    double initial_volume = pCell->custom_data["initial_volume"];
-    int division_count = 0;
-    std::vector<PhysiCell::Cell*> lineage_cells;  // This will hold all cells in the current lineage
-    lineage_cells.push_back(pCell);  // Start with the original cell
-
-    // Start the recursive division and attaching process
-    recursive_division_and_attach(pCell, initial_volume, division_count, lineage_cells);
-
-//    std::cout << "For Cell ID: "<< pCell->ID << " , the volume before division was = " << volume_before_division << " , and the number of divisions this step = " << division_count << std::endl;
     
-    // Clear the lineage cells vector after all divisions are complete
-    lineage_cells.clear();
-//    std::cout << "Cleared lineage cells, total elements now: " << lineage_cells.size() << std::endl;
+    double initial_volume = pCell->custom_data["initial_volume"];
+
+    // Start the iterative division process
+    iterative_division_and_attach(pCell, initial_volume);
+    
+    
+//    double volume_before_division = pCell ->phenotype.volume.total;
+//    double initial_volume = pCell->custom_data["initial_volume"];
+//    int division_count = 0;
+//    std::vector<PhysiCell::Cell*> lineage_cells;  // This will hold all cells in the current lineage
+//    lineage_cells.push_back(pCell);  // Start with the original cell
+//
+//    // Start the recursive division and attaching process
+//    recursive_division_and_attach(pCell, initial_volume, division_count, lineage_cells);
+//
+////    std::cout << "For Cell ID: "<< pCell->ID << " , the volume before division was = " << volume_before_division << " , and the number of divisions this step = " << division_count << std::endl;
+//    
+//    // Clear the lineage cells vector after all divisions are complete
+//    lineage_cells.clear();
+////    std::cout << "Cleared lineage cells, total elements now: " << lineage_cells.size() << std::endl;
 
     return;
 }
@@ -848,8 +962,6 @@ void pred_hunt_function( Cell* pCell, Phenotype& phenotype, double dt ){
     static Cell_Definition* pPreyDef = find_cell_definition( "Cell" );
     static Cell_Definition* pPredDef = find_cell_definition( "Predator" );
     
-//    Cell* nbr = NULL;
-    
     bool is_hungry = (pCell->custom_data["energy"] < 40);
     
     
@@ -868,7 +980,7 @@ void pred_hunt_function( Cell* pCell, Phenotype& phenotype, double dt ){
             
             pCell -> custom_data["energy"] +=10;
             
-//            std::cout << "Predator has ingested prey: " << nbr->ID << ". New energy: " << pCell->custom_data["energy"] << std::endl;
+//            std::cout << "Predator has ingested prey: " << nbr->ID << ". who had number of attachments =  " << nbr -> state.number_of_attached_cells() << std::endl;
             
             is_hungry = (pCell->custom_data["energy"] < 40);  // Re-evaluate hunger in case the condition changes due to energy increase
 
@@ -876,6 +988,17 @@ void pred_hunt_function( Cell* pCell, Phenotype& phenotype, double dt ){
         }
         
     }
+}
+
+bool pred_repo_arrest_function( Cell* pCell, Phenotype& phenotype, double dt ){
+    // If the cell volume has not reached at least twice initial_volume, do not proceed to next phase.
+    double energy = pCell ->custom_data["energy"];
+ 
+    if (energy < 20 ){
+        return true;
+    }
+    return false;
+    
 }
 
 
