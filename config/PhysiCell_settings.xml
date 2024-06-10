@@ -1,10 +1,10 @@
 <PhysiCell_settings version="devel-version">
 
     <domain>
-        <x_min>-1000</x_min>
-        <x_max>1000</x_max>
-        <y_min>-1000</y_min>
-        <y_max>1000</y_max>
+        <x_min>-500</x_min>
+        <x_max>500</x_max>
+        <y_min>-500</y_min>
+        <y_max>500</y_max>
         <z_min>-10</z_min>
         <z_max>10</z_max>
         <dx>20</dx>
@@ -23,17 +23,17 @@
     </overall>
 
     <parallel>
-        <omp_num_threads>3</omp_num_threads>
+        <omp_num_threads>1</omp_num_threads>
     </parallel>
 
     <save>
         <folder>output</folder>
         <full_data>
-            <interval units="min">60</interval>
+            <interval units="min">1</interval>
             <enable>true</enable>
         </full_data>
         <SVG>
-            <interval units="min">60</interval>
+            <interval units="min">1</interval>
             <enable>true</enable>
             <plot_substrate enabled="false" limits="false">
                 <substrate>food</substrate>

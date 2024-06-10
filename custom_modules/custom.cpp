@@ -233,7 +233,8 @@ void create_cell_types( void )
     
     prey_cycle_model.phase_link(0,1).arrest_function = G0_arrest_function; // Assign an arrest function
 //    prey_cycle_model.phase_link(0,1).arrest_function = NULL;
-    prey_cycle_model.phase_link(1,2).arrest_function = S_arrest_function;
+//    prey_cycle_model.phase_link(1,2).arrest_function = S_arrest_function;
+    prey_cycle_model.phase_link(1,2).arrest_function = NULL;
     prey_cycle_model.phase_link(2,3).arrest_function = NULL;
     prey_cycle_model.phase_link(3,0).arrest_function = NULL;
         
@@ -437,11 +438,11 @@ void contact_function( Cell* pMe, Phenotype& phenoMe , Cell* pOther, Phenotype& 
 { return; } 
 
 
-// ****************************************************************************
-// ****************************************************************************
+// *********************************************************************************************
+// *********************************************************************************************
 // PREY FUNCTONS
-// ****************************************************************************
-// ****************************************************************************
+// *********************************************************************************************
+// *********************************************************************************************
 
 void prey_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt )
 {
@@ -461,11 +462,13 @@ void prey_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt )
     }
     
     // Stress acounting based on enviornment (low food or predator presence
-    prey_stress_function(pCell, phenotype, dt);
+//    prey_stress_function(pCell, phenotype, dt);
     
     // Death based on starvation
     if( pCell->custom_data["energy"] < 1.0 )
     {
+        std::cout << "Prey Cell ID " << pCell->ID << " is dying of starvation " << std::endl;
+
         pCell->lyse_cell();
 
     }
@@ -651,48 +654,48 @@ void prey_growth_and_metabolism(Cell* pCell, Phenotype& phenotype, double dt)
    
 }
 
-void prey_stress_function(Cell* pCell, Phenotype& phenotype, double dt)
-{
-    static Cell_Definition* pPreyDef = find_cell_definition( "Cell" );
-    static Cell_Definition* pPredDef = find_cell_definition( "Predator" );
-    
-    // Increase stress levels if predator is nearby
-    for( int n=0; n < pCell->state.neighbors.size(); n++ )
-    {
-        Cell* nbr = pCell->state.neighbors[n];
-        if( nbr->type == pPredDef->type ){
-            pCell -> custom_data["stress"] +=2;
-//            std::cout << "Cell ID ("<< pCell->ID <<" ) detects predator. " << std::endl;
-        }
-    }
-    
-    // Increase stress levels if there isn't food around
-    int food_index = microenvironment.find_density_index("food");
-    double food_nearby = pCell->nearest_density_vector()[food_index];
-    double threshold = 1.0;
-    if (food_nearby < threshold ){
-        pCell -> custom_data["stress"] +=0.1;
-//        std::cout << "Cell ID ("<< pCell->ID <<" ) detects low food. " << std::endl;
-
-    }
-    else {
-        pCell -> custom_data["stress"] -=0.5;
-//        std::cout << "Cell ID ("<< pCell->ID <<" ) detects adequate food. " << std::endl;
-    }
-    
-    
-    // Update stress based on decay rate
-    static double stress_decay_rate = pCell -> custom_data["stress_decay_rate"];
-    pCell->custom_data["stress"] /= (1.0 + dt*stress_decay_rate);
-    
-    // Ensure stress does not go negative
-    if (pCell->custom_data["stress"] < 0)
-    {
-        pCell->custom_data["stress"] = 0;
-    }
-//    std::cout << "Cell ID ("<< pCell->ID <<" ) new stress level is: " << pCell->custom_data["stress"] << std::endl;
-    
-}
+//void prey_stress_function(Cell* pCell, Phenotype& phenotype, double dt)
+//{
+//    static Cell_Definition* pPreyDef = find_cell_definition( "Cell" );
+//    static Cell_Definition* pPredDef = find_cell_definition( "Predator" );
+//    
+//    // Increase stress levels if predator is nearby
+//    for( int n=0; n < pCell->state.neighbors.size(); n++ )
+//    {
+//        Cell* nbr = pCell->state.neighbors[n];
+//        if( nbr->type == pPredDef->type ){
+//            pCell -> custom_data["stress"] +=2;
+////            std::cout << "Cell ID ("<< pCell->ID <<" ) detects predator. " << std::endl;
+//        }
+//    }
+//    
+//    // Increase stress levels if there isn't food around
+//    int food_index = microenvironment.find_density_index("food");
+//    double food_nearby = pCell->nearest_density_vector()[food_index];
+//    double threshold = 1.0;
+//    if (food_nearby < threshold ){
+//        pCell -> custom_data["stress"] +=0.1;
+////        std::cout << "Cell ID ("<< pCell->ID <<" ) detects low food. " << std::endl;
+//
+//    }
+//    else {
+//        pCell -> custom_data["stress"] -=0.5;
+////        std::cout << "Cell ID ("<< pCell->ID <<" ) detects adequate food. " << std::endl;
+//    }
+//    
+//    
+//    // Update stress based on decay rate
+//    static double stress_decay_rate = pCell -> custom_data["stress_decay_rate"];
+//    pCell->custom_data["stress"] /= (1.0 + dt*stress_decay_rate);
+//    
+//    // Ensure stress does not go negative
+//    if (pCell->custom_data["stress"] < 0)
+//    {
+//        pCell->custom_data["stress"] = 0;
+//    }
+////    std::cout << "Cell ID ("<< pCell->ID <<" ) new stress level is: " << pCell->custom_data["stress"] << std::endl;
+//    
+//}
 
 Cell* perform_division(Cell* pCell){
     Cell* child = pCell -> divide(); // Perform division, creating a child cell
@@ -700,63 +703,34 @@ Cell* perform_division(Cell* pCell){
     return child;
 }
 
-//
-//void recursive_division_and_attach(PhysiCell::Cell* pCell, double initial_volume, int& division_count, std::vector<PhysiCell::Cell*>& lineage_cells) {
-////    std::cout << "Evaluating Cell ID: " << pCell->ID << " for further division." << std::endl;
-//
-//    double current_volume = pCell->phenotype.volume.total;
-//
-//    // Check if the cell can divide
-//    if (current_volume >= 2 * initial_volume) {
-//        PhysiCell::Cell* child = perform_division(pCell);
-////        std::cout << "Division Occurred! Parent Cell ID: " << pCell->ID << ". Child Cell ID: " << child->ID << std::endl;
-//        division_count++;
-//        
-//        // Add the child to the lineage cells
-//        lineage_cells.push_back(child);
-//
-//        // Attach child to all other cells in lineage
-//        for(auto other_cell : lineage_cells) {
-//            if(other_cell != child) {
-//                child->attach_cell(other_cell);
-////                std::cout << "Attaching Cell ID " << child->ID << " to Cell ID " << other_cell->ID << std::endl;
-////                std::cout << "Cell (ID: " << child->ID << " ) has number of attachments =  " << child -> state.number_of_attached_cells() << std::endl;
-//                
-//            }
-//        }
-//        // Attach the parent to the child if not already done
-//        pCell->attach_cell(child);
-////        std::cout << "Attaching Cell ID " << pCell->ID << " to Cell ID " << child->ID << std::endl;
-////        std::cout << "Cell (ID: " << pCell->ID << " ) has number of attachments =  " << pCell -> state.number_of_attached_cells() << std::endl;
-//        
-//        
-//        // Recursive calls
-//        recursive_division_and_attach(pCell, initial_volume, division_count, lineage_cells);
-//        recursive_division_and_attach(child, initial_volume, division_count, lineage_cells);
-//    }
-//}
-
-
-
 void iterative_division_and_attach(Cell* pCell, double initial_volume) {
     //    std::cout << "Evaluating Cell ID: " << pCell->ID << " for further division." << std::endl;
+    
+    // vector initialization
     std::vector<Cell*> current_cells;
     current_cells.push_back(pCell);
-    
+    // calculate target number of divisions based on current volume vs initial volume
     int target_divisions = (int)floor(log2(pCell->phenotype.volume.total / initial_volume));
     
-    
-    for (int i = 0; i < target_divisions; ++i) {
-        std::vector<Cell*> new_cells;
+  
+    for (int i = 0; i < target_divisions; ++i)   // iterate through number of target divisions
+    {
+        std::vector<Cell*> new_cells; // initialize vector to store result of cell divisions
         
         // Perform division for each cell and update relationships
-        for (auto cell : current_cells) {
-            if (cell->phenotype.volume.total >= 2 * initial_volume) {
+        for (auto cell : current_cells) 
+        {
+            // Check if cell is atleast double its initial volume before dividing
+            if (cell->phenotype.volume.total >= 2 * initial_volume)
+            {
+                // Perform division and create new 'child' cell
+                // and mutally attach child and parrent cell
                 Cell* child = perform_division(cell);
                 new_cells.push_back(child);
                 cell->attach_cell(child); // Attach parent to child
                 child->attach_cell(cell); // Attach child to parent
                 
+            
                 // If you are attached to others, label 'inedible'
                 if (cell->state.number_of_attached_cells() > 0){
                     cell -> custom_data["edible"] = false;
@@ -772,7 +746,7 @@ void iterative_division_and_attach(Cell* pCell, double initial_volume) {
                 
                 
                 
-                // Also, attach new child to all previous lineage cells
+                // Attach new child to all previous lineage cells
                 for (auto lineage_cell : current_cells) {
                     if (lineage_cell != cell) { // No need to attach a cell to itself
                         child->attach_cell(lineage_cell);
@@ -780,6 +754,7 @@ void iterative_division_and_attach(Cell* pCell, double initial_volume) {
                     }
                 }
             }
+            
             // If no division is needed, still carry over the cell to the next cycle
             new_cells.push_back(cell); // Update the list of current cells for next division cycle
         }
@@ -829,20 +804,20 @@ bool G0_arrest_function(Cell* pCell, Phenotype& phenotype, double dt)
     }
     return false;
 }
-bool S_arrest_function(Cell* pCell, Phenotype& phenotype, double dt)
-{
-    // access stress level
-    double stress_level = pCell -> custom_data["stress"];
-    
-    // Get the threshold for arrest function
-    double stress_threshold = pCell -> custom_data["cycle_arrest_stress_threshold"];
-    if (stress_level > stress_threshold ){
-        return true;
-    }
-    return false;
-    
-    
-}
+//bool S_arrest_function(Cell* pCell, Phenotype& phenotype, double dt)
+//{
+//    // access stress level
+//    double stress_level = pCell -> custom_data["stress"];
+//    
+//    // Get the threshold for arrest function
+//    double stress_threshold = pCell -> custom_data["cycle_arrest_stress_threshold"];
+//    if (stress_level > stress_threshold ){
+//        return true;
+//    }
+//    return false;
+//    
+//    
+//}
 
 
 void phase_0_entry_function(Cell* pCell, Phenotype& phenotype, double dt)
@@ -871,22 +846,6 @@ void phase_1_entry_function(PhysiCell::Cell* pCell, PhysiCell::Phenotype& phenot
 
     // Start the iterative division process
     iterative_division_and_attach(pCell, initial_volume);
-    
-    
-//    double volume_before_division = pCell ->phenotype.volume.total;
-//    double initial_volume = pCell->custom_data["initial_volume"];
-//    int division_count = 0;
-//    std::vector<PhysiCell::Cell*> lineage_cells;  // This will hold all cells in the current lineage
-//    lineage_cells.push_back(pCell);  // Start with the original cell
-//
-//    // Start the recursive division and attaching process
-//    recursive_division_and_attach(pCell, initial_volume, division_count, lineage_cells);
-//
-////    std::cout << "For Cell ID: "<< pCell->ID << " , the volume before division was = " << volume_before_division << " , and the number of divisions this step = " << division_count << std::endl;
-//    
-//    // Clear the lineage cells vector after all divisions are complete
-//    lineage_cells.clear();
-////    std::cout << "Cleared lineage cells, total elements now: " << lineage_cells.size() << std::endl;
 
     return;
 }
@@ -931,11 +890,11 @@ void phase_3_exit_function(Cell* pCell, Phenotype& phenotype, double dt)
 
 
 
-// ****************************************************************************
-// ****************************************************************************
+// *********************************************************************************************
+// *********************************************************************************************
 // PREDATOR FUNCTONS
-// ****************************************************************************
-// ****************************************************************************
+// *********************************************************************************************
+// *********************************************************************************************
 
 void pred_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt ){
     
@@ -952,6 +911,8 @@ void pred_phenotype_function( Cell* pCell, Phenotype& phenotype, double dt ){
     // Death based on starvation
     if( pCell->custom_data["energy"] < 1.0 )
     {
+        std::cout << "Predator Cell ID " << pCell->ID << " is dying of starvation " << std::endl;
+
         pCell->lyse_cell();
         
         
